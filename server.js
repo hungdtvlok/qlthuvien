@@ -31,7 +31,6 @@ const client = new MongoClient(uri);
 
 async function startServer() {
     try {
-        // Kết nối 1 lần duy nhất
         await client.connect();
         console.log("✅ Kết nối MongoDB thành công");
 
