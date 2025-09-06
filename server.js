@@ -1,34 +1,15 @@
-// server.js
 const express = require("express");
 const cors = require("cors");
-const { MongoClient, ObjectId } = require("mongodb"); // ObjectId để xử lý id
-const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
+const { MongoClient, ObjectId } = require("mongodb");
 
 const app = express();
+
+// PORT động từ Render, fallback về 5000 khi chạy local
 const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
-
-// Cho phép truy cập ảnh trong thư mục uploads
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-
-// Tạo thư mục uploads nếu chưa có
-if (!fs.existsSync("./uploads")) {
-    fs.mkdirSync("./uploads");
-}
-
-// Cấu hình Multer để lưu ảnh
-const storage = multer.diskStorage({
-    destination: "uploads/",
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname)); // tên file duy nhất
-    }
-});
-const upload = multer({ storage: storage });
+app.use(express.json({ limit: "10mb" })); // tăng limit cho ảnh Base64 lớn
 
 // Kết nối MongoDB
 const uri = "mongodb+srv://bdx:123456789%40@cluster0.xmmbfgf.mongodb.net/qlthuvien?retryWrites=true&w=majority&appName=Cluster0";
@@ -36,16 +17,13 @@ const client = new MongoClient(uri);
 
 async function startServer() {
     try {
-        // Kết nối MongoDB
         await client.connect();
         console.log("✅ Kết nối MongoDB thành công");
 
         const db = client.db("qlthuvien");
         const collection = db.collection("qlsach");
 
-        // ========================
-        // API LẤY DANH SÁCH SÁCH
-        // ========================
+        // API lấy danh sách sách
         app.get("/sach", async (req, res) => {
             try {
                 const sach = await collection.find({}).toArray();
@@ -56,22 +34,21 @@ async function startServer() {
             }
         });
 
-        // ========================
-        // API THÊM SÁCH (UPLOAD ẢNH)
-        // ========================
-        app.post("/sach", upload.single("cover"), async (req, res) => {
+        // API thêm sách (lưu Base64 trực tiếp)
+        app.post("/sach", async (req, res) => {
             try {
+                const { title, author, category, published_year, status, quantity, cover_image } = req.body;
+
                 const newSach = {
-                    title: req.body.title,
-                    author: req.body.author,
-                    category: req.body.category,
-                    published_year: parseInt(req.body.published_year),
-                    status: req.body.status,
-                    quantity: parseInt(req.body.quantity),
-                    cover_image: req.file
-                        ? `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`
-                        : null
+                    title,
+                    author,
+                    category,
+                    published_year: parseInt(published_year),
+                    status,
+                    quantity: parseInt(quantity),
+                    cover_image: cover_image || null // Base64
                 };
+
                 await collection.insertOne(newSach);
                 res.json({ message: "✅ Thêm sách thành công", sach: newSach });
             } catch (err) {
@@ -80,41 +57,38 @@ async function startServer() {
             }
         });
 
-        // ========================
-        // API SỬA SÁCH (UPLOAD ẢNH MỚI NẾU CÓ)
-        // ========================
-        app.put("/sach/:id", upload.single("cover"), async (req, res) => {
+        // API sửa sách theo id
+        app.put("/sach/:id", async (req, res) => {
             try {
-                const { id } = req.params;
-                const updateData = {
-                    title: req.body.title,
-                    author: req.body.author,
-                    category: req.body.category,
-                    published_year: parseInt(req.body.published_year),
-                    status: req.body.status,
-                    quantity: parseInt(req.body.quantity)
+                const id = req.params.id;
+                const { title, author, category, published_year, status, quantity, cover_image } = req.body;
+
+                const updatedSach = {
+                    title,
+                    author,
+                    category,
+                    published_year: parseInt(published_year),
+                    status,
+                    quantity: parseInt(quantity),
+                    cover_image: cover_image || null
                 };
-                if (req.file) {
-                    updateData.cover_image = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
-                }
-                const result = await collection.findOneAndUpdate(
+
+                await collection.updateOne(
                     { _id: new ObjectId(id) },
-                    { $set: updateData },
-                    { returnDocument: "after" }
+                    { $set: updatedSach }
                 );
-                res.json({ message: "✅ Sửa sách thành công", sach: result.value });
+
+                res.json({ message: "✅ Sửa sách thành công", sach: updatedSach });
             } catch (err) {
                 console.error(err);
                 res.status(500).send("❌ Lỗi server khi sửa sách");
             }
         });
 
-        // ========================
-        // API XÓA SÁCH
-        // ========================
+        // API xóa sách theo id
         app.delete("/sach/:id", async (req, res) => {
             try {
-                const { id } = req.params;
+                const id = req.params.id;
                 await collection.deleteOne({ _id: new ObjectId(id) });
                 res.json({ message: "✅ Xóa sách thành công" });
             } catch (err) {
@@ -123,9 +97,7 @@ async function startServer() {
             }
         });
 
-        // ========================
-        // START SERVER
-        // ========================
+        // Chạy server
         app.listen(PORT, () => {
             console.log(`🚀 Server chạy tại port ${PORT}`);
         });
