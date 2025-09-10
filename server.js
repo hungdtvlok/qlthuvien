@@ -9,7 +9,7 @@ app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
 // 🔑 Lấy MongoDB URI từ biến môi trường
-const uri = process.env.MONGODB_URI;
+const uri = process.env.MONGO_URI;
 const client = new MongoClient(uri);
 
 async function startServer() {
