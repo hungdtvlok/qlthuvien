@@ -3,16 +3,13 @@ const cors = require("cors");
 const { MongoClient, ObjectId } = require("mongodb");
 
 const app = express();
-
-// PORT động từ Render, fallback về 5000 khi chạy local
 const PORT = process.env.PORT || 5000;
 
-// Middleware
 app.use(cors());
-app.use(express.json({ limit: "10mb" })); // tăng limit cho ảnh Base64 lớn
+app.use(express.json({ limit: "10mb" }));
 
-// Kết nối MongoDB
-const uri = "mongodb+srv://bdx:123456789%40@cluster0.xmmbfgf.mongodb.net/qlthuvien?retryWrites=true&w=majority&appName=Cluster0";
+// 🔑 Lấy MongoDB URI từ biến môi trường
+const uri = process.env.MONGODB_URI;
 const client = new MongoClient(uri);
 
 async function startServer() {
@@ -23,22 +20,25 @@ async function startServer() {
         const db = client.db("qlthuvien");
         const collection = db.collection("qlsach");
 
-        // API lấy danh sách sách
+        // Route test
+        app.get("/", (req, res) => {
+            res.send("🚀 API Quản lý thư viện đang chạy!");
+        });
+
+        // Lấy sách
         app.get("/sach", async (req, res) => {
             try {
                 const sach = await collection.find({}).toArray();
                 res.json(sach);
             } catch (err) {
-                console.error(err);
                 res.status(500).send("❌ Lỗi server khi lấy sách");
             }
         });
 
-        // API thêm sách (lưu Base64 trực tiếp)
+        // Thêm sách
         app.post("/sach", async (req, res) => {
             try {
                 const { title, author, category, published_year, status, quantity, cover_image } = req.body;
-
                 const newSach = {
                     title,
                     author,
@@ -46,23 +46,20 @@ async function startServer() {
                     published_year: parseInt(published_year),
                     status,
                     quantity: parseInt(quantity),
-                    cover_image: cover_image || null // Base64
+                    cover_image: cover_image || null
                 };
-
                 await collection.insertOne(newSach);
                 res.json({ message: "✅ Thêm sách thành công", sach: newSach });
-            } catch (err) {
-                console.error(err);
+            } catch {
                 res.status(500).send("❌ Lỗi server khi thêm sách");
             }
         });
 
-        // API sửa sách theo id
+        // Sửa sách
         app.put("/sach/:id", async (req, res) => {
             try {
                 const id = req.params.id;
                 const { title, author, category, published_year, status, quantity, cover_image } = req.body;
-
                 const updatedSach = {
                     title,
                     author,
@@ -72,36 +69,27 @@ async function startServer() {
                     quantity: parseInt(quantity),
                     cover_image: cover_image || null
                 };
-
-                await collection.updateOne(
-                    { _id: new ObjectId(id) },
-                    { $set: updatedSach }
-                );
-
+                await collection.updateOne({ _id: new ObjectId(id) }, { $set: updatedSach });
                 res.json({ message: "✅ Sửa sách thành công", sach: updatedSach });
-            } catch (err) {
-                console.error(err);
+            } catch {
                 res.status(500).send("❌ Lỗi server khi sửa sách");
             }
         });
 
-        // API xóa sách theo id
+        // Xóa sách
         app.delete("/sach/:id", async (req, res) => {
             try {
                 const id = req.params.id;
                 await collection.deleteOne({ _id: new ObjectId(id) });
                 res.json({ message: "✅ Xóa sách thành công" });
-            } catch (err) {
-                console.error(err);
+            } catch {
                 res.status(500).send("❌ Lỗi server khi xóa sách");
             }
         });
 
-        // Chạy server
         app.listen(PORT, () => {
             console.log(`🚀 Server chạy tại port ${PORT}`);
         });
-
     } catch (err) {
         console.error("❌ Kết nối MongoDB thất bại:", err);
     }
